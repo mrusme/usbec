@@ -82,7 +82,7 @@ func main() {
 						disableIntegratedKeyboard(false)
 						delete(ATTACHED_KEYBOARDS, name)
 
-						notify("serialusbterminal.svg",
+						notify("keyboard.svg",
 							device.PrettyName+" detached!",
 							"The "+device.PrettyName+
 								" has been detached and the integrated keyboard enabled.")
@@ -95,7 +95,7 @@ func main() {
 					disableIntegratedKeyboard(true)
 					ATTACHED_KEYBOARDS[name] = device
 
-					notify("serialusbterminal.svg",
+					notify("keyboard.svg",
 						device.PrettyName+" attached!",
 						"The "+device.PrettyName+
 							" has been attached and the integrated keyboard disabled.")
