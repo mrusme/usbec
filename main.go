@@ -2,14 +2,16 @@ package main
 
 import (
 	"log"
+	"os"
 	"os/exec"
 
 	"github.com/elemecca/go-hotplug"
 )
 
 type Device struct {
-	VendorID  int
-	ProductID int
+	VendorID   int
+	ProductID  int
+	PrettyName string
 }
 
 var INTEGRATED_KEYBOARDS = []string{
@@ -18,8 +20,10 @@ var INTEGRATED_KEYBOARDS = []string{
 }
 
 var KEYBOARDS = map[string]Device{
-	"rama-m60a": Device{VendorID: 0x5241, ProductID: 0x060a},
-	"rama-kara": Device{VendorID: 0x5241, ProductID: 0x4b52},
+	"rama-m60a": Device{VendorID: 0x5241, ProductID: 0x060a,
+		PrettyName: "RAMA M60-A"},
+	"rama-kara": Device{VendorID: 0x5241, ProductID: 0x4b52,
+		PrettyName: "RAMA KARA"},
 }
 
 var ATTACHED_KEYBOARDS map[string]Device
@@ -77,6 +81,11 @@ func main() {
 
 						disableIntegratedKeyboard(false)
 						delete(ATTACHED_KEYBOARDS, name)
+
+						notify("serialusbterminal.svg",
+							device.PrettyName+" detached!",
+							"The "+device.PrettyName+
+								" has been detached and the integrated keyboard enabled.")
 					})
 					if err != nil {
 						log.Println(err)
@@ -85,6 +94,11 @@ func main() {
 
 					disableIntegratedKeyboard(true)
 					ATTACHED_KEYBOARDS[name] = device
+
+					notify("serialusbterminal.svg",
+						device.PrettyName+" attached!",
+						"The "+device.PrettyName+
+							" has been attached and the integrated keyboard disabled.")
 				}
 			}
 
@@ -113,4 +127,12 @@ func disableIntegratedKeyboard(disable bool) {
 			"events", status)
 		cmd.Run()
 	}
+}
+
+func notify(icon, title, text string) {
+	cmd := exec.Command("notify-send",
+		"-i", os.Getenv("ICONS_PATH")+"/"+icon,
+		"-a", "usbec",
+		title, text)
+	cmd.Run()
 }
