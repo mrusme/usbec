@@ -14,6 +14,8 @@ type Device struct {
 	PrettyName string
 }
 
+// swaymsg -t get_inputs | jq '.[].identifier'
+
 var INTEGRATED_KEYBOARDS = []string{
 	"1:1:AT_Translated_Set_2_keyboard",
 	"4012:2782:keyd_virtual_keyboard",
@@ -24,6 +26,8 @@ var KEYBOARDS = map[string]Device{
 		PrettyName: "RAMA M60-A"},
 	"rama-kara": Device{VendorID: 0x5241, ProductID: 0x4b52,
 		PrettyName: "RAMA KARA"},
+	"corne-v3": Device{VendorID: 0x4653, ProductID: 0x0001,
+		PrettyName: "Corne V3"},
 }
 
 var ATTACHED_KEYBOARDS map[string]Device
