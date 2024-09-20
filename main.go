@@ -135,6 +135,10 @@ func runCommands(cmds []config.Cmd) []error {
 }
 
 func notify(icon, title, text string) {
+	if cfg.Notifications == false {
+		return
+	}
+
 	var re = regexp.MustCompile(`(?m)\$\{{0,1}(\w+)\}{0,1}`)
 	for _, match := range re.FindAllStringSubmatch(icon, -1) {
 		fullvar := match[0]
