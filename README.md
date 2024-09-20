@@ -2,10 +2,14 @@ usbec
 -----
 
 The *USB Equipment Commander* is a lightweight daemon that is able to run 
-commands based on the USB equipment connected to a computer. *"Why, there's udev 
-for that?!"* you might say. Sure, but udev rules come with all sorts of 
-limitations, making it very cumbersome to run especially Wayland-related 
-commands.
+commands based on the USB equipment connected to a computer. It makes it easily 
+possible to run scripts and programs when specific USB devices are being 
+connected or disconnected.
+
+*"Why, there's udev for that?!"* you might say. Sure, but udev rules come with 
+all sorts of limitations, making it very cumbersome to run especially 
+Wayland-related commands. Often times, rules that trigger user-specific scripts 
+and tools are hacky at best, given the constrains imposed by udev.
 
 The daemon can be fully configured using a [toml file](usbec.toml).
 
