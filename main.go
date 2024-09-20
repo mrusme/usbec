@@ -1,11 +1,15 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"os/exec"
+	"regexp"
+	"strings"
 
 	"github.com/elemecca/go-hotplug"
+	"github.com/mrusme/usbec/config"
 )
 
 type Device struct {
@@ -14,26 +18,17 @@ type Device struct {
 	PrettyName string
 }
 
-// swaymsg -t get_inputs | jq '.[].identifier'
-
-var INTEGRATED_KEYBOARDS = []string{
-	"1:1:AT_Translated_Set_2_keyboard",
-	"4012:2782:keyd_virtual_keyboard",
-}
-
-var KEYBOARDS = map[string]Device{
-	"rama-m60a": Device{VendorID: 0x5241, ProductID: 0x060a,
-		PrettyName: "RAMA M60-A"},
-	"rama-kara": Device{VendorID: 0x5241, ProductID: 0x4b52,
-		PrettyName: "RAMA KARA"},
-	"corne-v3": Device{VendorID: 0x4653, ProductID: 0x0001,
-		PrettyName: "Corne V3"},
-}
-
-var ATTACHED_KEYBOARDS map[string]Device
+var ATTACHED_DEVICES map[string]config.Device
+var cfg config.Config
 
 func main() {
-	ATTACHED_KEYBOARDS = make(map[string]Device)
+	var err error
+
+	if cfg, err = config.Cfg(); err != nil {
+		panic(err)
+	}
+
+	ATTACHED_DEVICES = make(map[string]config.Device)
 
 	listener, _ := hotplug.New(
 		hotplug.DevIfHid,
@@ -43,7 +38,7 @@ func main() {
 
 			usb, err := devIf.Device.Up(hotplug.DevUsbDevice)
 			if err != nil {
-				log.Println(err)
+				puts("%s", err)
 				return
 			}
 
@@ -61,55 +56,65 @@ func main() {
 
 			for _, err = range errs {
 				if err != nil {
-					log.Println(err)
+					puts("%s", err)
 				}
 			}
 
-			for name, device := range KEYBOARDS {
+			for _, device := range cfg.Devices {
 				if device.VendorID == vendorId && device.ProductID == productId {
-					if _, isAttached := ATTACHED_KEYBOARDS[name]; isAttached {
-						log.Printf("'%s' already attached, skipping\n", name)
+					if _, isAttached := ATTACHED_DEVICES[device.ID]; isAttached {
+						puts("'%s' already attached, skipping\n", device.ID)
 						continue
 					}
 
-					log.Printf(
+					puts(
 						"Attached '%s' bus=%d address=%d vid=%04x pid=%04x dev=%s\n",
-						name, busNumber, address, vendorId, productId, devIf.Path,
+						device.ID, busNumber, address, vendorId, productId, devIf.Path,
 					)
 
 					err = devIf.OnDetach(func() {
-						log.Printf(
+						puts(
 							"Detached '%s' bus=%d address=%d vid=%04x pid=%04x dev=%s\n",
-							name, busNumber, address, vendorId, productId, devIf.Path,
+							device.ID, busNumber, address, vendorId, productId, devIf.Path,
 						)
 
-						disableIntegratedKeyboard(false)
-						delete(ATTACHED_KEYBOARDS, name)
+						errs := runCommands(device.On.Detach)
+						delete(ATTACHED_DEVICES, device.ID)
 
-						notify("keyboard.svg",
+						text := "The " + device.PrettyName + " has been detached."
+						estr := errstrFromErrs(device.On.Detach, errs)
+						if estr != "" {
+							text += "\nThe following commands returned errors:\n" + estr
+						}
+						notify(device.NotificationIcon,
 							device.PrettyName+" detached!",
-							"The "+device.PrettyName+
-								" has been detached and the integrated keyboard enabled.")
+							text,
+						)
 					})
 					if err != nil {
-						log.Println(err)
+						puts("%s", err)
 						continue
 					}
 
-					disableIntegratedKeyboard(true)
-					ATTACHED_KEYBOARDS[name] = device
+					errs := runCommands(device.On.Attach)
+					ATTACHED_DEVICES[device.ID] = device
 
-					notify("keyboard.svg",
+					text := "The " + device.PrettyName + " has been attached."
+					estr := errstrFromErrs(device.On.Attach, errs)
+					if estr != "" {
+						text += "\nThe following commands returned errors:\n" + estr
+					}
+					notify(device.NotificationIcon,
 						device.PrettyName+" attached!",
-						"The "+device.PrettyName+
-							" has been attached and the integrated keyboard disabled.")
+						text,
+					)
 				}
 			}
 
 		},
 	)
 
-	err := listener.Listen()
+	err = listener.Listen()
 	if err != nil {
 		panic(err)
 	}
@@ -117,26 +122,50 @@ func main() {
 	select {}
 }
 
-func disableIntegratedKeyboard(disable bool) {
-	var cmd *exec.Cmd
-	var status string = "enabled"
+func runCommands(cmds []config.Cmd) []error {
+	var errs []error
 
-	if disable {
-		status = "disabled"
+	for _, cmd := range cmds {
+		ec := exec.Command(cmd.Command, cmd.Args...)
+		err := ec.Run()
+		errs = append(errs, err)
 	}
 
-	for _, ikbd := range INTEGRATED_KEYBOARDS {
-		cmd = exec.Command("swaymsg", "input",
-			ikbd,
-			"events", status)
-		cmd.Run()
-	}
+	return errs
 }
 
 func notify(icon, title, text string) {
+	var re = regexp.MustCompile(`(?m)\$\{{0,1}(\w+)\}{0,1}`)
+	for _, match := range re.FindAllStringSubmatch(icon, -1) {
+		fullvar := match[0]
+		varname := match[1]
+
+		icon = strings.Replace(icon, fullvar, os.Getenv(varname), 1)
+	}
+
+	puts("Running notify-send with -i %s ...", icon)
+
 	cmd := exec.Command("notify-send",
-		"-i", os.Getenv("ICONS_PATH")+"/"+icon,
+		"-i", icon,
 		"-a", "usbec",
 		title, text)
+	cmd.Env = os.Environ()
 	cmd.Run()
+}
+
+func puts(format string, v ...any) {
+	if cfg.Debug {
+		log.Printf(format+"\n", v)
+	}
+}
+
+func errstrFromErrs(cmds []config.Cmd, errs []error) string {
+	errsstr := ""
+	for i, err := range errs {
+		if err != nil {
+			errsstr = fmt.Sprintf("%s`%s` (%v)\n", errsstr, cmds[i].Command, cmds[i].Args)
+		}
+	}
+
+	return errsstr
 }
