@@ -21,6 +21,8 @@ builds:
       - 6
       - 7
     ignore:
+      - goos: linux
+        goarch: 386
       - goos: darwin
         goarch: 386
       - goos: darwin
