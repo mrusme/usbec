@@ -27,6 +27,7 @@ func main() {
 	if cfg, err = config.Cfg(); err != nil {
 		panic(err)
 	}
+	puts("%s", "Debug is enabled")
 
 	ATTACHED_DEVICES = make(map[string]config.Device)
 
@@ -59,6 +60,8 @@ func main() {
 					puts("%s", err)
 				}
 			}
+
+			puts("New device attached: %s %s %s %s", busNumber, address, vendorId, productId)
 
 			for _, device := range cfg.Devices {
 				if device.VendorID == vendorId && device.ProductID == productId {
