@@ -8,8 +8,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/elemecca/go-hotplug"
-	"github.com/mrusme/usbec/config"
+	"xn--gckvb8fzb.com/usbec/config"
+	"xn--gckvb8fzb.com/usbec/hotplug"
 )
 
 type Device struct {
