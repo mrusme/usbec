@@ -39,10 +39,10 @@ jobs:
           EOF
           sudo apt-get update
           sudo apt-get install --yes \
+            pkg-config \
             libudev-dev \
             libudev-dev:arm64 \
-            gcc-aarch64-linux-gnu \
-            pkg-config-aarch64-linux-gnu
+            gcc-aarch64-linux-gnu
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v7
