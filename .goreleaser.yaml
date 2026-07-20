@@ -1,36 +1,51 @@
-# .goreleaser.yaml
 version: 2
-builds:
-  -
-    env:
-      - CGO_ENABLED=0
-    goos:
-      - darwin
-      - linux
-      - netbsd
-      - openbsd
-      - freebsd
-      # - plan9
-      - windows
-    goarch:
-      - 386
-      - amd64
-      - arm
-      - arm64
-    goarm:
-      - 6
-      - 7
-    ignore:
-      - goos: linux
-        goarch: 386
-      - goos: darwin
-        goarch: 386
-      - goos: darwin
-        goarch: arm
-      - goos: netbsd
-        goarch: arm64
-      - goos: freebsd
-        goarm: arm64
-      - goos: plan9
-        goarm: arm64
 
+project_name: usbec
+
+builds:
+  - id: usbec
+    binary: usbec
+    main: .
+    env:
+      - CGO_ENABLED=1
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    overrides:
+      - goos: linux
+        goarch: arm64
+        env:
+          - CC=aarch64-linux-gnu-gcc
+          - PKG_CONFIG=aarch64-linux-gnu-pkg-config
+    ldflags:
+      - -s -w
+    mod_timestamp: '{{ .CommitTimestamp }}'
+
+archives:
+  - id: usbec
+    formats:
+      - tar.gz
+    name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
+    files:
+      - README.md
+      - LICENSE
+      - usbec.toml
+      - hotplug/LICENSE.txt
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+      - Merge pull request
+      - Merge branch
+
+release:
+  prerelease: auto

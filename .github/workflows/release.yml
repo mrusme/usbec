@@ -5,28 +5,50 @@ on:
     tags:
       - '*'
 
+permissions:
+  contents: write
+
 jobs:
-
   release:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-    - uses: actions/checkout@v4
+      - name: Check out
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: 1.22
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
 
-    - name: Install Dependencies
-      run: sudo apt-get install --yes libudev-dev
-      env:
-        DEBIAN_FRONTEND: noninteractive
+      - name: Set up arm64 cross toolchain
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo dpkg --add-architecture arm64
+          sudo sed -i 's/^Types: deb$/Types: deb\nArchitectures: amd64/' \
+            /etc/apt/sources.list.d/ubuntu.sources
+          sudo tee /etc/apt/sources.list.d/ubuntu-arm64.sources >/dev/null <<'EOF'
+          Types: deb
+          URIs: http://ports.ubuntu.com/ubuntu-ports
+          Suites: noble noble-updates
+          Components: main universe
+          Architectures: arm64
+          Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+          EOF
+          sudo apt-get update
+          sudo apt-get install --yes \
+            libudev-dev \
+            libudev-dev:arm64 \
+            gcc-aarch64-linux-gnu \
+            pkg-config-aarch64-linux-gnu
 
-    - name: Run GoReleaser
-      uses: goreleaser/goreleaser-action@v6
-      with:
-        distribution: goreleaser
-        version: '~> v2'
-        args: release --clean --timeout 80m
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: '~> v2'
+          args: release --clean --timeout 80m
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
