@@ -6,6 +6,8 @@ const (
 	DevIfUnknown InterfaceClass = iota
 	DevIfHid
 	DevIfPrinter
+	DevIfStorage
+	DevIfStoragePartition
 )
 
 type DeviceClass uint

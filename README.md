@@ -1,7 +1,11 @@
 usbec
 -----
 
-[<img src="https://xn--gckvb8fzb.com/images/chatroom.png" width="275">](https://xn--gckvb8fzb.com/contact/)
+[![SEGV 
+LICENSE](https://img.shields.io/static/v1?label=SEGV%20LICENSE&message=1.1&labelColor=0060A8&color=ffffff)](https://xn--gckvb8fzb.com/segv/)
+
+[<img src="https://xn--gckvb8fzb.com/images/chatroom.png"
+width="275">](https://xn--gckvb8fzb.com/contact/)
 
 The *USB Equipment Commander* is a lightweight daemon that is able to run 
 commands based on the USB equipment connected to a computer. It makes it easily 

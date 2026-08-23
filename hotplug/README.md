@@ -1,5 +1,4 @@
-hotplug
--------
+## hotplug
 
 This package is derived from [go-hotplug][gh] by Sam Hanes, vendored at commit
 `77bd9a5abc65` (2023-10-20). It's licensed under the Apache License 2.0, a copy
@@ -10,10 +9,31 @@ Upstream has seen no releases since October 2023.
 
 [gh]: https://github.com/elemecca/go-hotplug
 
+## Classes
+
+`New` takes one interface class and reports devices matching it. `DevIfHid`
+covers `hidraw` nodes, `DevIfPrinter` covers `usblp` nodes, and `DevIfStorage`
+and `DevIfStoragePartition` cover USB attached block devices. Passing any other
+value, `DevIfUnknown` included, returns an error.
+
+A listener handles a single class, watching several of them at once means
+creating several listeners. `usbec` uses `DevIfHid` and `DevIfStorage`.
+
 ## Changes
 
 The following changes were made to the upstream source, as required by section
 4(b) of the Apache License 2.0:
+
+Two interface classes were added, `DevIfStorage` for USB attached whole disks
+and `DevIfStoragePartition` for partitions. Both match the `block` subsystem, on
+the `disk` and `partition` device types respectively.
+
+Matching a subsystem alone isn't enough for block devices, because NVMe, SATA,
+virtio and zram disks all appear under `block` too. So `deviceCondition` needs
+`ancestorSubsystem` and `ancestorDevtype` fields, tested with
+`udev_device_get_parent_with_subsystem_devtype`, and the two storage classes use
+them to require a `usb`/`usb_device` ancestor. The check runs before the
+`interfaceOnly` reparenting, so it applies to the node the event is about.
 
 The Windows implementation was removed, along with the portable indirection that
 existed to support it. Upstream split every type across a portable file and a

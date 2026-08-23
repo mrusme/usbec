@@ -7,18 +7,20 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
+	"sync"
 
 	"xn--gckvb8fzb.com/usbec/config"
 	"xn--gckvb8fzb.com/usbec/hotplug"
 )
 
-type Device struct {
-	VendorID   int
-	ProductID  int
-	PrettyName string
+var INTERFACE_CLASSES = []hotplug.InterfaceClass{
+	hotplug.DevIfHid,
+	hotplug.DevIfStorage,
 }
 
 var ATTACHED_DEVICES map[string]config.Device
+var ATTACHED_DEVICES_MUTEX sync.Mutex
+var LISTENERS []*hotplug.Listener
 var cfg config.Config
 
 func main() {
@@ -31,98 +33,125 @@ func main() {
 
 	ATTACHED_DEVICES = make(map[string]config.Device)
 
-	listener, _ := hotplug.New(
-		hotplug.DevIfHid,
-		func(devIf *hotplug.DeviceInterface) {
-			var err error
-			var errs []error
+	for _, class := range INTERFACE_CLASSES {
+		listener, err := hotplug.New(class, onAttach)
+		if err != nil {
+			puts("Cannot create listener for interface class %d: %s", class, err)
+			continue
+		}
 
-			usb, err := devIf.Device.Up(hotplug.DevUsbDevice)
-			if err != nil {
-				puts("%s", err)
-				return
-			}
+		if err = listener.Listen(); err != nil {
+			puts("Cannot listen for interface class %d: %s", class, err)
+			continue
+		}
 
-			busNumber, err := usb.BusNumber()
-			errs = append(errs, err)
+		LISTENERS = append(LISTENERS, listener)
+	}
 
-			address, err := usb.Address()
-			errs = append(errs, err)
-
-			vendorId, err := usb.VendorId()
-			errs = append(errs, err)
-
-			productId, err := usb.ProductId()
-			errs = append(errs, err)
-
-			for _, err = range errs {
-				if err != nil {
-					puts("%s", err)
-				}
-			}
-
-			puts("New device attached: %s %s %s %s", busNumber, address, vendorId, productId)
-
-			for _, device := range cfg.Devices {
-				if device.VendorID == vendorId && device.ProductID == productId {
-					if _, isAttached := ATTACHED_DEVICES[device.ID]; isAttached {
-						puts("'%s' already attached, skipping\n", device.ID)
-						continue
-					}
-
-					puts(
-						"Attached '%s' bus=%d address=%d vid=%04x pid=%04x dev=%s\n",
-						device.ID, busNumber, address, vendorId, productId, devIf.Path,
-					)
-
-					err = devIf.OnDetach(func() {
-						puts(
-							"Detached '%s' bus=%d address=%d vid=%04x pid=%04x dev=%s\n",
-							device.ID, busNumber, address, vendorId, productId, devIf.Path,
-						)
-
-						errs := runCommands(device.On.Detach)
-						delete(ATTACHED_DEVICES, device.ID)
-
-						text := "The " + device.PrettyName + " has been detached."
-						estr := errstrFromErrs(device.On.Detach, errs)
-						if estr != "" {
-							text += "\nThe following commands returned errors:\n" + estr
-						}
-						notify(device.NotificationIcon,
-							device.PrettyName+" detached!",
-							text,
-						)
-					})
-					if err != nil {
-						puts("%s", err)
-						continue
-					}
-
-					errs := runCommands(device.On.Attach)
-					ATTACHED_DEVICES[device.ID] = device
-
-					text := "The " + device.PrettyName + " has been attached."
-					estr := errstrFromErrs(device.On.Attach, errs)
-					if estr != "" {
-						text += "\nThe following commands returned errors:\n" + estr
-					}
-					notify(device.NotificationIcon,
-						device.PrettyName+" attached!",
-						text,
-					)
-				}
-			}
-
-		},
-	)
-
-	err = listener.Listen()
-	if err != nil {
-		panic(err)
+	if len(LISTENERS) == 0 {
+		panic("no interface class could be listened on")
 	}
 
 	select {}
+}
+
+func onAttach(devIf *hotplug.DeviceInterface) {
+	var errs []error
+
+	usb, err := devIf.Device.Up(hotplug.DevUsbDevice)
+	if err != nil {
+		puts("%s", err)
+		return
+	}
+
+	busNumber, err := usb.BusNumber()
+	errs = append(errs, err)
+
+	address, err := usb.Address()
+	errs = append(errs, err)
+
+	vendorId, err := usb.VendorId()
+	errs = append(errs, err)
+
+	productId, err := usb.ProductId()
+	errs = append(errs, err)
+
+	for _, err = range errs {
+		if err != nil {
+			puts("%s", err)
+		}
+	}
+
+	puts(
+		"New device attached: bus=%d address=%d vid=%04x pid=%04x dev=%s",
+		busNumber, address, vendorId, productId, devIf.Path,
+	)
+
+	for _, device := range cfg.Devices {
+		if device.VendorID != vendorId || device.ProductID != productId {
+			continue
+		}
+
+		ATTACHED_DEVICES_MUTEX.Lock()
+		_, isAttached := ATTACHED_DEVICES[device.ID]
+		if !isAttached {
+			ATTACHED_DEVICES[device.ID] = device
+		}
+		ATTACHED_DEVICES_MUTEX.Unlock()
+
+		if isAttached {
+			puts("'%s' already attached, skipping", device.ID)
+			continue
+		}
+
+		puts(
+			"Attached '%s' bus=%d address=%d vid=%04x pid=%04x dev=%s",
+			device.ID, busNumber, address, vendorId, productId, devIf.Path,
+		)
+
+		err = devIf.OnDetach(func() {
+			puts(
+				"Detached '%s' bus=%d address=%d vid=%04x pid=%04x dev=%s",
+				device.ID, busNumber, address, vendorId, productId, devIf.Path,
+			)
+
+			errs := runCommands(device.On.Detach)
+
+			ATTACHED_DEVICES_MUTEX.Lock()
+			delete(ATTACHED_DEVICES, device.ID)
+			ATTACHED_DEVICES_MUTEX.Unlock()
+
+			text := "The " + device.PrettyName + " has been detached."
+			estr := errstrFromErrs(device.On.Detach, errs)
+			if estr != "" {
+				text += "\nThe following commands returned errors:\n" + estr
+			}
+			notify(device.NotificationIcon,
+				device.PrettyName+" detached!",
+				text,
+			)
+		})
+		if err != nil {
+			ATTACHED_DEVICES_MUTEX.Lock()
+			delete(ATTACHED_DEVICES, device.ID)
+			ATTACHED_DEVICES_MUTEX.Unlock()
+
+			puts("%s", err)
+			continue
+		}
+
+		errs := runCommands(device.On.Attach)
+
+		text := "The " + device.PrettyName + " has been attached."
+		estr := errstrFromErrs(device.On.Attach, errs)
+		if estr != "" {
+			text += "\nThe following commands returned errors:\n" + estr
+		}
+		notify(device.NotificationIcon,
+			device.PrettyName+" attached!",
+			text,
+		)
+	}
 }
 
 func runCommands(cmds []config.Cmd) []error {
@@ -162,7 +191,7 @@ func notify(icon, title, text string) {
 
 func puts(format string, v ...any) {
 	if cfg.Debug {
-		log.Printf(format+"\n", v)
+		log.Printf(format+"\n", v...)
 	}
 }
 

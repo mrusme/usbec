@@ -11,44 +11,58 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-24.04
+    container:
+      image: debian:trixie
     steps:
+      - name: Set up cross toolchains
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          for arch in i386 arm64 armel armhf ppc64el riscv64 s390x; do
+            dpkg --add-architecture "$arch"
+          done
+          apt-get update
+          apt-get install --yes --no-install-recommends \
+            build-essential \
+            ca-certificates \
+            curl \
+            git \
+            pkg-config \
+            xz-utils \
+            crossbuild-essential-i386 \
+            crossbuild-essential-arm64 \
+            crossbuild-essential-armel \
+            crossbuild-essential-armhf \
+            crossbuild-essential-ppc64el \
+            crossbuild-essential-riscv64 \
+            crossbuild-essential-s390x \
+            libudev-dev \
+            libudev-dev:i386 \
+            libudev-dev:arm64 \
+            libudev-dev:armel \
+            libudev-dev:armhf \
+            libudev-dev:ppc64el \
+            libudev-dev:riscv64 \
+            libudev-dev:s390x
+
       - name: Check out
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
+
+      - name: Trust the checkout
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
 
-      - name: Set up arm64 cross toolchain
-        env:
-          DEBIAN_FRONTEND: noninteractive
-        run: |
-          sudo dpkg --add-architecture arm64
-          sudo sed -i 's/^Types: deb$/Types: deb\nArchitectures: amd64/' \
-            /etc/apt/sources.list.d/ubuntu.sources
-          sudo tee /etc/apt/sources.list.d/ubuntu-arm64.sources >/dev/null <<'EOF'
-          Types: deb
-          URIs: http://ports.ubuntu.com/ubuntu-ports
-          Suites: noble noble-updates
-          Components: main universe
-          Architectures: arm64
-          Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
-          EOF
-          sudo apt-get update
-          sudo apt-get install --yes \
-            pkg-config \
-            libudev-dev \
-            libudev-dev:arm64 \
-            gcc-aarch64-linux-gnu
-
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v7
         with:
           distribution: goreleaser
           version: '~> v2'
-          args: release --clean --timeout 80m
+          args: release --clean --timeout 120m
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

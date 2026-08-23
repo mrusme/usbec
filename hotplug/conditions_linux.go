@@ -26,12 +26,18 @@ var (
 	cstrUsb          = C.CString("usb")
 	cstrUsbDevice    = C.CString("usb_device")
 	cstrUsbInterface = C.CString("usb_interface")
+	cstrBlock        = C.CString("block")
+	cstrDisk         = C.CString("disk")
+	cstrPartition    = C.CString("partition")
 )
 
 type deviceCondition struct {
 	subsystem *C.char
 	devtype   *C.char
 	driver    *C.char
+
+	ancestorSubsystem *C.char
+	ancestorDevtype   *C.char
 
 	interfaceOnly bool
 }
@@ -45,6 +51,17 @@ func (cond *deviceCondition) matches(dev *C.struct_udev_device) bool {
 	if cond.devtype != nil {
 		devtype := C.udev_device_get_devtype(dev)
 		if devtype == nil || C.strcmp(cond.devtype, devtype) != 0 {
+			return false
+		}
+	}
+
+	if cond.ancestorSubsystem != nil {
+		ancestor := C.udev_device_get_parent_with_subsystem_devtype(
+			dev,
+			cond.ancestorSubsystem,
+			cond.ancestorDevtype,
+		)
+		if ancestor == nil {
 			return false
 		}
 	}
@@ -75,6 +92,18 @@ var interfaceClassCondition = map[InterfaceClass]*deviceCondition{
 		subsystem:     cstrUsbmisc,
 		driver:        cstrUsblp,
 		interfaceOnly: true,
+	},
+	DevIfStorage: {
+		subsystem:         cstrBlock,
+		devtype:           cstrDisk,
+		ancestorSubsystem: cstrUsb,
+		ancestorDevtype:   cstrUsbDevice,
+	},
+	DevIfStoragePartition: {
+		subsystem:         cstrBlock,
+		devtype:           cstrPartition,
+		ancestorSubsystem: cstrUsb,
+		ancestorDevtype:   cstrUsbDevice,
 	},
 }
 
