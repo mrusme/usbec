@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -22,9 +23,18 @@ var ATTACHED_DEVICES map[string]config.Device
 var ATTACHED_DEVICES_MUTEX sync.Mutex
 var LISTENERS []*hotplug.Listener
 var cfg config.Config
+var VERSION = "dev"
 
 func main() {
 	var err error
+
+	showVersion := flag.Bool("version", false, "print the version and exit")
+	flag.Parse()
+
+	if *showVersion {
+		fmt.Printf("usbec %s\n", VERSION)
+		return
+	}
 
 	if cfg, err = config.Cfg(); err != nil {
 		panic(err)

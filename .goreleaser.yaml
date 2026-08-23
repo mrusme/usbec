@@ -60,7 +60,7 @@ builds:
           - CC=s390x-linux-gnu-gcc
           - PKG_CONFIG_LIBDIR=/usr/lib/s390x-linux-gnu/pkgconfig:/usr/share/pkgconfig
     ldflags:
-      - -s -w
+      - -s -w -X main.VERSION={{ .Version }}
     mod_timestamp: '{{ .CommitTimestamp }}'
 
 archives:
